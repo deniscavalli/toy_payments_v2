@@ -5,7 +5,7 @@ use std::sync::mpsc::{SendError, Sender};
 use thiserror::Error;
 use crate::structs::transaction::Transaction;
 
-// CSV Error definition
+// CSV Reader Error definition
 #[derive(Error, Debug)]
 pub enum CSVReaderError {
     #[error("Error reading the input file")]
