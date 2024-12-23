@@ -1,35 +1,20 @@
 extern crate csv;
 
 use csv::{ReaderBuilder, Trim};
-use std::error::Error;
-use std::fmt::Result as FmtResult;
-use std::fmt::{Display, Formatter};
-use std::sync::mpsc::Sender;
-
+use std::sync::mpsc::{SendError, Sender};
+use thiserror::Error;
 use crate::structs::transaction::Transaction;
 
 // CSV Error definition
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum CSVReaderError {
-    CSVReadingError,
+    #[error("Error reading the input file")]
+    ReadingError,
+    #[error("Error opening the input file")]
+    FileOpeningError(#[from] ECSV::Error),
+    #[error("Failed sending the transaction")]
+    TxFailError(#[from] SendError<Transaction>)
 }
-
-impl CSVReaderError {
-    // Returns the message from the Error type
-    pub fn message(&self) -> &str {
-        match self {
-            CSVReaderError::CSVReadingError => "error reading from csv",
-        }
-    }
-}
-
-impl Display for CSVReaderError {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{}", self.message())
-    }
-}
-
-impl Error for CSVReaderError {}
 
 /// Reads a CSV entry from csv_file_path and send it to the Sender
 ///
@@ -40,14 +25,14 @@ impl Error for CSVReaderError {}
 pub fn read(tx_channel: Sender<Transaction>, csv_file_path: String) -> Result<(), CSVReaderError> {
     let mut rdr = ReaderBuilder::new()
         .trim(Trim::All)
-        .from_path(csv_file_path).unwrap();
+        .from_path(csv_file_path)?;
     for tx in rdr.deserialize() {
         match tx {
             Ok(_) => {
-                tx_channel.send(tx.unwrap()).unwrap();
+                tx_channel.send(tx?)?;
             }
             Err(_) => {
-                return Err(CSVReaderError::CSVReadingError);
+                return Err(CSVReaderError::ReadingError);
             }
         }
     }
