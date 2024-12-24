@@ -11,19 +11,17 @@ use crate::csv::{reader, writer};
 use processors::txprocessor;
 use structs::clients::ClientAccount;
 use structs::transaction::{Transaction, TransactionRecord};
-
-use std::thread;
+use futures::future::join_all;
 
 mod csv;
 mod processors;
 mod structs;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let arguments: Vec<String> = env::args().collect();
     let csv_file = arguments[1].clone();
     
-
-
     // Client records on a HashMap, the key is the client's ID
     let clients: HashMap<u16, ClientAccount> = HashMap::new();
     let clients_ledger = Arc::new(Mutex::new(clients));
@@ -36,37 +34,43 @@ fn main() {
     let start_write = Arc::new(AtomicBool::new(false));
     let start_writer = Arc::clone(&start_write);
 
-    // Channels for the threads communication
+    // Channels for the task communication
     let (tx_transactions, rx_transactions): (Sender<Transaction>, Receiver<Transaction>) =
         mpsc::channel();
     let (tx_transactions2, rx_transactions2): (Sender<Transaction>, Receiver<Transaction>) =
         mpsc::channel();
 
-    // Reader thread    
-    let tx_clone_reader = tx_transactions.clone();
-    let handle_reader = thread::spawn(|| reader::read(tx_clone_reader, csv_file).unwrap());
+    // Tasks handlers
+    let mut handlers = vec![];
 
-    // Thread that will store the Transactions to the HashMap
+    // Reader task    
+    let tx_clone_reader = tx_transactions.clone();
+    handlers.push(tokio::spawn(async { reader::read(tx_clone_reader, csv_file).unwrap()}));
+
+    // task that will store the Transactions to the HashMap
     let tl_store = Arc::clone(&transactions_ledger);
     let tx_store = tx_transactions2.clone();
-    let handle_store = thread::spawn(|| {
+    handlers.push(tokio::spawn(async  {
         txprocessor::store_transactions(rx_transactions, tx_store, tl_store).unwrap()
-    });
+    }));
 
-    // Thread that will process the Transactions and, by the end,
-    // enable the writer thread
+    // task that will process the Transactions and, by the end,
+    // enable the writer task
     let tl_process = Arc::clone(&transactions_ledger);
     let cl_process = Arc::clone(&clients_ledger);
-    let handle_process = thread::spawn(|| {
+    
+    handlers.push(tokio::spawn(async {
         txprocessor::process_transactions(rx_transactions2, tl_process, cl_process, start_write)
-            .unwrap()
-    });
+        .unwrap()
+    }));
+    
+    let results = join_all(handlers).await;
 
-    handle_reader.join().unwrap();
-    handle_store.join().unwrap();
-    handle_process.join().unwrap();
-
-    // By last, writer thread that will print the client records to STDOUT
-    let handle_writer = thread::spawn(|| writer::write(clients_ledger, start_writer).unwrap());
-    handle_writer.join().unwrap();
+    for result in results {
+        result.unwrap();
+    }
+    
+    // By last, writer task that will print the client records to STDOUT
+    let handle_writer = tokio::spawn(async { writer::write(clients_ledger, start_writer).unwrap()});
+    handle_writer.await.unwrap();
 }
