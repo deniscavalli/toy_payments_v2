@@ -1,35 +1,22 @@
-use std::collections::HashMap;
-use std::error::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-
-use crate::structs::clients::ClientAccount;
-use crate::structs::transaction::{Transaction, TransactionRecord};
+use crate::structs::{
+    clients::ClientAccount,
+    transaction::{Transaction, TransactionRecord},
+};
 use rust_decimal::prelude::*;
-use std::fmt::Result as FmtResult;
-use std::fmt::{Display, Formatter};
+use std::collections::HashMap;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
+use thiserror::Error;
 
-#[derive(Debug)]
+// TX Processor Error definition
+#[derive(Error, Debug)]
 pub enum TXProcessError {
+    #[error("Invalid Transaction")]
     InvalidTxType,
 }
-
-impl TXProcessError {
-    pub fn message(&self) -> &str {
-        match self {
-            TXProcessError::InvalidTxType => "Invalid Transaction Type",
-        }
-    }
-}
-
-impl Display for TXProcessError {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{}", self.message())
-    }
-}
-
-impl Error for TXProcessError {}
 
 /// Parse the Transactinos to Transaction Records
 /// and add it to a internal use HashMap holding all transactions that
@@ -180,7 +167,7 @@ fn deposit(
     client_ledger: Arc<Mutex<HashMap<u16, ClientAccount>>>,
     client: u16,
     amount: Decimal,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), TXProcessError> {
     let mut cl = client_ledger.lock().unwrap();
     if let Some(client_record) = cl.get_mut(&client) {
         client_record.deposit(amount).unwrap();
@@ -204,7 +191,7 @@ fn withdrawal(
     client_ledger: Arc<Mutex<HashMap<u16, ClientAccount>>>,
     client: u16,
     amount: Decimal,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), TXProcessError> {
     let mut cl = client_ledger.lock().unwrap();
     if let Some(client_record) = cl.get_mut(&client) {
         client_record.withdrawal(amount).unwrap();
@@ -232,7 +219,7 @@ fn dispute(
     tx_ledger: Arc<Mutex<HashMap<u32, TransactionRecord>>>,
     tx_id: u32,
     client: u16,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), TXProcessError> {
     if let Some(transaction) = tx_ledger.lock().unwrap().get_mut(&tx_id) {
         if transaction.client() == client {
             let mut cl = client_ledger.lock().unwrap();
@@ -262,7 +249,7 @@ fn resolve(
     tx_ledger: Arc<Mutex<HashMap<u32, TransactionRecord>>>,
     tx_id: u32,
     client: u16,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), TXProcessError> {
     if let Some(transaction) = tx_ledger.lock().unwrap().get_mut(&tx_id) {
         if transaction.disputed() && transaction.client() == client {
             let mut cl = client_ledger.lock().unwrap();
@@ -293,7 +280,7 @@ fn chargeback(
     tx_ledger: Arc<Mutex<HashMap<u32, TransactionRecord>>>,
     tx_id: u32,
     client: u16,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), TXProcessError> {
     if let Some(transaction) = tx_ledger.lock().unwrap().get_mut(&tx_id) {
         if transaction.disputed() && transaction.client() == client {
             let mut cl = client_ledger.lock().unwrap();

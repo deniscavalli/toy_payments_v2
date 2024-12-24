@@ -1,11 +1,14 @@
-use std::collections::HashMap;
-use std::io;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    io,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 use thiserror::Error;
 
 use crate::structs::clients::ClientAccount;
-
 
 // CSV Writer Error definition
 #[derive(Error, Debug)]
@@ -13,7 +16,7 @@ pub enum CSVWriterError {
     #[error("Error flushing the output file")]
     FlushingError(#[from] std::io::Error),
     #[error("Error writing in the output file")]
-    FileWritingError(#[from] ECSV::Error)
+    FileWritingError(#[from] ECSV::Error),
 }
 
 /// Writes a SCV to the STDOUT from a HashMap of ClientAccount

@@ -1,9 +1,9 @@
 extern crate csv;
 
+use crate::structs::transaction::Transaction;
 use csv::{ReaderBuilder, Trim};
 use std::sync::mpsc::{SendError, Sender};
 use thiserror::Error;
-use crate::structs::transaction::Transaction;
 
 // CSV Reader Error definition
 #[derive(Error, Debug)]
@@ -13,7 +13,7 @@ pub enum CSVReaderError {
     #[error("Error opening the input file")]
     FileOpeningError(#[from] ECSV::Error),
     #[error("Failed sending the transaction")]
-    TxFailError(#[from] SendError<Transaction>)
+    TxFailError(#[from] SendError<Transaction>),
 }
 
 /// Reads a CSV entry from csv_file_path and send it to the Sender
